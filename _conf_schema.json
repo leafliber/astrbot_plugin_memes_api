@@ -1,0 +1,147 @@
+{
+  "meme_generator_base_url": {
+    "description": "meme-generator-rs Web Server 地址",
+    "type": "string",
+    "default": "http://127.0.0.1:2233",
+    "hint": "meme-generator-rs 的 HTTP API 地址"
+  },
+  "memes_command_prefixes": {
+    "description": "表情指令前缀列表",
+    "type": "list",
+    "default": [],
+    "hint": "为空时不使用额外前缀，直接匹配关键词"
+  },
+  "memes_disabled_list": {
+    "description": "禁用的表情 key 列表",
+    "type": "list",
+    "default": [],
+    "hint": "填写表情的 key，可在表情详情中查看"
+  },
+  "memes_params_mismatch_policy": {
+    "description": "图片/文字数量不符时的处理策略",
+    "type": "object",
+    "hint": "设置参数数量不符时的处理方式",
+    "items": {
+      "too_much_text": {
+        "description": "文字过多时的处理",
+        "type": "string",
+        "default": "ignore",
+        "hint": "可选：ignore（忽略）、prompt（提示）、drop（去掉多余文字）",
+        "options": ["ignore", "prompt", "drop"]
+      },
+      "too_few_text": {
+        "description": "文字不足时的处理",
+        "type": "string",
+        "default": "ignore",
+        "hint": "可选：ignore（忽略）、prompt（提示）、get（交互式获取）",
+        "options": ["ignore", "prompt", "get"]
+      },
+      "too_much_image": {
+        "description": "图片过多时的处理",
+        "type": "string",
+        "default": "ignore",
+        "hint": "可选：ignore（忽略）、prompt（提示）、drop（去掉多余图片）",
+        "options": ["ignore", "prompt", "drop"]
+      },
+      "too_few_image": {
+        "description": "图片不足时的处理",
+        "type": "string",
+        "default": "ignore",
+        "hint": "可选：ignore（忽略）、prompt（提示）、get（交互式获取）",
+        "options": ["ignore", "prompt", "get"]
+      }
+    }
+  },
+  "memes_use_sender_when_no_image": {
+    "description": "无图片时使用发送者头像",
+    "type": "bool",
+    "default": false,
+    "hint": "当表情需要至少1张图且没有输入图片时，是否使用发送者的头像"
+  },
+  "memes_use_default_when_no_text": {
+    "description": "无文字时使用默认文字",
+    "type": "bool",
+    "default": false,
+    "hint": "当表情需要至少1段文字且没有输入文字时，是否使用默认文字"
+  },
+  "memes_random_meme_show_info": {
+    "description": "随机表情显示关键词",
+    "type": "bool",
+    "default": true,
+    "hint": "使用随机表情时是否同时发出表情关键词"
+  },
+  "memes_list_image_config": {
+    "description": "表情列表图配置",
+    "type": "object",
+    "hint": "控制表情列表图的显示方式",
+    "items": {
+      "sort_by": {
+        "description": "排序方式",
+        "type": "string",
+        "default": "keywords",
+        "hint": "可选：key、keywords、date_created、date_modified",
+        "options": ["key", "keywords", "date_created", "date_modified"]
+      },
+      "sort_reverse": {
+        "description": "是否倒序排序",
+        "type": "bool",
+        "default": false
+      },
+      "text_template": {
+        "description": "表情显示文字模板",
+        "type": "string",
+        "default": "{keywords}",
+        "hint": "可用变量：{index}、{key}、{keywords}、{shortcuts}、{tags}"
+      },
+      "add_category_icon": {
+        "description": "添加类型图标",
+        "type": "bool",
+        "default": true,
+        "hint": "是否添加图标表示图片表情包和文字表情包"
+      },
+      "label_new_timedelta_days": {
+        "description": "新表情标记天数",
+        "type": "int",
+        "default": 30,
+        "hint": "表情添加时间在该天数以内时添加 new 图标"
+      },
+      "label_hot_threshold": {
+        "description": "热门表情调用次数阈值",
+        "type": "int",
+        "default": 21,
+        "hint": "在统计周期内调用次数超过该阈值时添加 hot 图标"
+      },
+      "label_hot_days": {
+        "description": "热门统计天数",
+        "type": "int",
+        "default": 7,
+        "hint": "热门表情调用次数统计周期（天）"
+      }
+    }
+  },
+  "memes_multiple_image_config": {
+    "description": "多图发送配置",
+    "type": "object",
+    "hint": "发送多张图片时的相关设置",
+    "items": {
+      "direct_send_threshold": {
+        "description": "直接发送阈值",
+        "type": "int",
+        "default": 10,
+        "hint": "发送图片数量大于该数目时，不再直接发送"
+      },
+      "send_zip_file": {
+        "description": "打包为ZIP发送",
+        "type": "bool",
+        "default": true,
+        "hint": "图片数量超过阈值时，是否打包为ZIP以文件形式发送"
+      },
+      "send_forward_msg": {
+        "description": "发送合并转发消息",
+        "type": "bool",
+        "default": false,
+        "hint": "图片数量超过阈值时，是否发送合并转发消息"
+      }
+    }
+  }
+}
