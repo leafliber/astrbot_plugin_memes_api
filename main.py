@@ -166,10 +166,11 @@ class MemesApiPlugin(Star):
                 return text[len(prefix):].lstrip()
         return None
 
-    async def _parse_message_params(self, event: AstrMessageEvent) -> tuple[list[str], list[MemeImage], list[str]]:
+    async def _parse_message_params(self, event: AstrMessageEvent, keyword: str = "") -> tuple[list[str], list[MemeImage], list[str]]:
         texts: list[str] = []
         images: list[MemeImage] = []
         names: list[str] = []
+        keyword_lower = keyword.lower() if keyword else ""
 
         message_chain = event.message_obj.message
 
@@ -220,6 +221,12 @@ class MemesApiPlugin(Star):
                         names.append(word[1:])
                     elif word.startswith("@") and len(word) > 1:
                         pass
+                    elif keyword_lower and word.lower() == keyword_lower:
+                        pass
+                    elif keyword_lower and word.lower().startswith(keyword_lower):
+                        remainder = word[len(keyword):]
+                        if remainder:
+                            texts.append(remainder)
                     else:
                         if word:
                             texts.append(word)
@@ -547,7 +554,7 @@ class MemesApiPlugin(Star):
             logger.debug(f"用户 {user_id} 无权使用表情 {matched_meme.key}")
             return
 
-        texts, images, names = await self._parse_message_params(event)
+        texts, images, names = await self._parse_message_params(event, keyword=matched_keyword or "")
 
         options: dict[str, Any] = {}
 
