@@ -111,10 +111,26 @@ class MemesApiPlugin(Star):
 
     @filter.on_astrbot_loaded()
     async def on_loaded(self):
+        logger.info(f"表情包插件开始加载，API 地址: {self.base_url}")
+        try:
+            from .api import get_version
+            version = await get_version()
+            logger.info(f"meme-generator-rs 版本: {version}")
+        except Exception as e:
+            logger.warning(f"无法连接到 meme-generator-rs API ({self.base_url}): {e}")
+            logger.warning("请确认 meme-generator-rs 服务已启动，否则所有表情功能将不可用")
+
         await self.meme_manager.init(disabled_list=self.disabled_list)
         self._build_maps()
         self._memes_loaded = True
-        logger.info(f"表情包插件加载完成，共 {len(self.meme_manager.get_memes())} 个表情")
+
+        meme_count = len(self.meme_manager.get_memes())
+        keyword_count = len(self._keyword_map)
+        shortcut_count = len(self._shortcut_patterns)
+        logger.info(f"表情包插件加载完成，共 {meme_count} 个表情，{keyword_count} 个关键词，{shortcut_count} 个快捷指令")
+
+        if meme_count == 0:
+            logger.warning("未加载到任何表情，请检查 meme-generator-rs API 是否正常运行")
 
     def _build_maps(self):
         self._meme_dict = {}
@@ -150,7 +166,7 @@ class MemesApiPlugin(Star):
                 return text[len(prefix):].lstrip()
         return None
 
-    def _parse_message_params(self, event: AstrMessageEvent) -> tuple[list[str], list[MemeImage], list[str]]:
+    async def _parse_message_params(self, event: AstrMessageEvent) -> tuple[list[str], list[MemeImage], list[str]]:
         texts: list[str] = []
         images: list[MemeImage] = []
         names: list[str] = []
@@ -161,9 +177,11 @@ class MemesApiPlugin(Star):
             if isinstance(seg, CompAt):
                 pass
             elif isinstance(seg, CompImage):
-                image_data = self._extract_image_data(seg)
+                image_data = await self._extract_image_data_async(seg)
                 if image_data:
                     images.append(MemeImage(name="", data=image_data))
+                else:
+                    logger.debug(f"图片提取失败: file={seg.file}, url={seg.url}")
             elif isinstance(seg, Plain):
                 words = seg.text.strip().split()
                 for word in words:
@@ -278,20 +296,25 @@ class MemesApiPlugin(Star):
         info = meme.info
         params = info.params
 
+        logger.debug(f"开始生成表情 {meme.key}: 图片数={len(images)}, 文字数={len(texts)}, 需要: 图片={params.min_images}~{params.max_images}, 文字={params.min_texts}~{params.max_texts}")
+
         if params.min_images == 2 and len(images) == 1:
             avatar = await self._get_sender_avatar_async(event)
             if avatar:
                 sender_name = event.get_sender_name() or event.get_sender_id()
                 images.insert(0, MemeImage(name=sender_name, data=avatar))
+                logger.debug(f"自动补充发送者头像作为第一张图片")
 
         if self.use_sender_when_no_image and params.min_images >= 1 and len(images) == 0:
             avatar = await self._get_sender_avatar_async(event)
             if avatar:
                 sender_name = event.get_sender_name() or event.get_sender_id()
                 images.append(MemeImage(name=sender_name, data=avatar))
+                logger.debug(f"无图片时自动使用发送者头像")
 
         if self.use_default_when_no_text and params.min_texts > 0 and len(texts) == 0:
             texts = list(params.default_texts)
+            logger.debug(f"无文字时自动使用默认文字: {texts}")
 
         text_range = (
             f"{params.min_texts} ~ {params.max_texts}"
@@ -307,6 +330,7 @@ class MemesApiPlugin(Star):
         if len(texts) < params.min_texts:
             msg = f"文字数量不符，应为 {text_range}，实际传入 {len(texts)}"
             if self.policy_too_few_text == "ignore":
+                logger.debug(f"表情 {meme.key}: {msg}，策略为 ignore，跳过")
                 return
             if self.policy_too_few_text == "prompt":
                 yield event.plain_result(msg)
@@ -317,6 +341,7 @@ class MemesApiPlugin(Star):
         if len(texts) > params.max_texts:
             msg = f"文字数量不符，应为 {text_range}，实际传入 {len(texts)}"
             if self.policy_too_much_text == "ignore":
+                logger.debug(f"表情 {meme.key}: {msg}，策略为 ignore，跳过")
                 return
             if self.policy_too_much_text == "prompt":
                 yield event.plain_result(msg)
@@ -327,6 +352,7 @@ class MemesApiPlugin(Star):
         if len(images) < params.min_images:
             msg = f"图片数量不符，应为 {image_range}，实际传入 {len(images)}"
             if self.policy_too_few_image == "ignore":
+                logger.debug(f"表情 {meme.key}: {msg}，策略为 ignore，跳过")
                 return
             if self.policy_too_few_image == "prompt":
                 yield event.plain_result(msg)
@@ -337,6 +363,7 @@ class MemesApiPlugin(Star):
         if len(images) > params.max_images:
             msg = f"图片数量不符，应为 {image_range}，实际传入 {len(images)}"
             if self.policy_too_much_image == "ignore":
+                logger.debug(f"表情 {meme.key}: {msg}，策略为 ignore，跳过")
                 return
             if self.policy_too_much_image == "prompt":
                 yield event.plain_result(msg)
@@ -346,16 +373,21 @@ class MemesApiPlugin(Star):
 
         try:
             result = await meme.generate(images, texts, options)
+            logger.info(f"表情 {meme.key} 生成成功，结果大小: {len(result)} bytes")
         except ImageDecodeError as e:
+            logger.warning(f"表情 {meme.key} 图片解码出错: {e.error}")
             yield event.plain_result(f"图片解码出错：{e.error}")
             return
         except ImageEncodeError as e:
+            logger.warning(f"表情 {meme.key} 图片编码出错: {e.error}")
             yield event.plain_result(f"图片编码出错：{e.error}")
             return
         except ImageAssetMissing as e:
+            logger.warning(f"表情 {meme.key} 缺少图片资源: {e.path}")
             yield event.plain_result(f"缺少图片资源：{e.path}")
             return
         except DeserializeError as e:
+            logger.warning(f"表情 {meme.key} 选项解析出错: {e.error}")
             yield event.plain_result(f"表情选项解析出错：{e.error}")
             return
         except ImageNumberMismatch as e:
@@ -421,6 +453,7 @@ class MemesApiPlugin(Star):
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_all_message(self, event: AstrMessageEvent):
         if not self._memes_loaded:
+            logger.debug("表情包插件尚未加载完成，跳过消息处理")
             return
 
         message_str = event.message_str.strip()
@@ -429,6 +462,7 @@ class MemesApiPlugin(Star):
 
         matched_text = self._match_prefix(message_str)
         if matched_text is None and self.command_prefixes:
+            logger.debug(f"消息 '{message_str}' 不匹配任何指令前缀 {self.command_prefixes}，跳过")
             return
 
         search_text = matched_text if matched_text is not None else message_str
@@ -471,13 +505,17 @@ class MemesApiPlugin(Star):
                     break
 
         if matched_meme is None:
+            logger.debug(f"消息 '{search_text}' 未匹配到任何表情关键词或快捷指令")
             return
+
+        logger.info(f"匹配到表情: {matched_meme.key} (关键词: {matched_keyword}, 快捷指令: {matched_shortcut is not None})")
 
         user_id = self._get_user_id(event)
         if not self.meme_manager.check(user_id, matched_meme.key):
+            logger.debug(f"用户 {user_id} 无权使用表情 {matched_meme.key}")
             return
 
-        texts, images, names = self._parse_message_params(event)
+        texts, images, names = await self._parse_message_params(event)
 
         options: dict[str, Any] = {}
 
@@ -684,7 +722,7 @@ class MemesApiPlugin(Star):
         if not self._memes_loaded:
             return
 
-        texts, images, names = self._parse_message_params(event)
+        texts, images, names = await self._parse_message_params(event)
 
         num_images = len(images)
         num_texts = len(texts)

@@ -51,6 +51,9 @@ class MemeManager:
             logger.warning(f"获取表情列表失败: {e}")
             memes = []
 
+        if disabled_list:
+            logger.info(f"禁用的表情: {disabled_list}")
+
         self.__meme_dict = {
             meme.key: meme
             for meme in filter(
@@ -58,6 +61,7 @@ class MemeManager:
                 memes,
             )
         }
+        logger.info(f"从 API 获取到 {len(memes)} 个表情，过滤后剩余 {len(self.__meme_dict)} 个")
         self.__load()
         self.__dump()
         self.__refresh_names()

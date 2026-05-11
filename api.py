@@ -96,7 +96,14 @@ async def send_request(
 ):
     async with httpx.AsyncClient(timeout=60) as client:
         request_method = client.post if request_type == "POST" else client.get
-        resp = await request_method(BASE_URL + router, **kwargs)
+        try:
+            resp = await request_method(BASE_URL + router, **kwargs)
+        except httpx.ConnectError as e:
+            logger.error(f"无法连接到 meme-generator-rs API ({BASE_URL + router}): {e}")
+            raise NetworkError(f"无法连接到 meme-generator-rs API ({BASE_URL}): {e}") from e
+        except httpx.TimeoutException as e:
+            logger.error(f"请求 meme-generator-rs API 超时 ({BASE_URL + router}): {e}")
+            raise NetworkError(f"请求超时 ({BASE_URL + router}): {e}") from e
         status_code = resp.status_code
         if status_code == 200:
             if response_type == "JSON":
@@ -157,8 +164,10 @@ async def send_request(
                 exc.feedback = data.get("feedback", "")
                 raise exc
             else:
+                logger.warning(f"meme-generator-rs API 返回未知错误码 {code}: {message}")
                 raise MemeGeneratorException(message)
         else:
+            logger.error(f"meme-generator-rs API 返回未处理的状态码 {status_code}: {router}")
             resp.raise_for_status()
 
 
