@@ -15,7 +15,7 @@ from dateutil.relativedelta import relativedelta
 
 from astrbot.api import logger
 from astrbot.api.event import filter, AstrMessageEvent
-from astrbot.api.message_components import Image as CompImage, Plain, At as CompAt, Node
+from astrbot.api.message_components import Image as CompImage, Plain, At as CompAt, Node, Reply
 from astrbot.api.star import Context, Star
 from astrbot.api import AstrBotConfig
 
@@ -173,8 +173,37 @@ class MemesApiPlugin(Star):
 
         message_chain = event.message_obj.message
 
+        reply_texts: list[str] = []
+        reply_images: list[MemeImage] = []
+
         for seg in message_chain:
-            if isinstance(seg, CompAt):
+            if isinstance(seg, Reply):
+                reply_chain = getattr(seg, 'chain', None) or []
+                for reply_seg in reply_chain:
+                    if isinstance(reply_seg, CompImage):
+                        image_data = await self._extract_image_data_async(reply_seg)
+                        if image_data:
+                            reply_images.append(MemeImage(name="", data=image_data))
+                    elif isinstance(reply_seg, Plain):
+                        text = reply_seg.text.strip()
+                        if text:
+                            for word in text.split():
+                                if word:
+                                    reply_texts.append(word)
+                if not reply_texts:
+                    reply_msg_str = getattr(seg, 'message_str', None)
+                    if reply_msg_str and reply_msg_str.strip():
+                        for word in reply_msg_str.strip().split():
+                            if word:
+                                reply_texts.append(word)
+                reply_sender_id = getattr(seg, 'sender_id', None)
+                if reply_sender_id and reply_sender_id != 0:
+                    reply_sender_id_str = str(reply_sender_id)
+                    avatar_data = await self._get_user_avatar_async(reply_sender_id_str)
+                    if avatar_data:
+                        reply_sender_nick = getattr(seg, 'sender_nickname', None) or reply_sender_id_str
+                        reply_images.insert(0, MemeImage(name=reply_sender_nick, data=avatar_data))
+            elif isinstance(seg, CompAt):
                 pass
             elif isinstance(seg, CompImage):
                 image_data = await self._extract_image_data_async(seg)
@@ -217,6 +246,9 @@ class MemesApiPlugin(Star):
         for i in range(len(names)):
             if i < len(images):
                 images[i] = MemeImage(name=names[i], data=images[i].data)
+
+        texts = reply_texts + texts
+        images = reply_images + images
 
         return texts, images, names
 
@@ -1288,6 +1320,13 @@ class MemesApiPlugin(Star):
         for seg in event.message_obj.message:
             if isinstance(seg, CompImage):
                 return await self._extract_image_data_async(seg)
+            elif isinstance(seg, Reply):
+                reply_chain = getattr(seg, 'chain', None) or []
+                for reply_seg in reply_chain:
+                    if isinstance(reply_seg, CompImage):
+                        data = await self._extract_image_data_async(reply_seg)
+                        if data:
+                            return data
         return None
 
     async def _get_all_images(self, event: AstrMessageEvent) -> list[bytes]:
@@ -1297,6 +1336,13 @@ class MemesApiPlugin(Star):
                 data = await self._extract_image_data_async(seg)
                 if data:
                     images.append(data)
+            elif isinstance(seg, Reply):
+                reply_chain = getattr(seg, 'chain', None) or []
+                for reply_seg in reply_chain:
+                    if isinstance(reply_seg, CompImage):
+                        data = await self._extract_image_data_async(reply_seg)
+                        if data:
+                            images.append(data)
         return images
 
     def _save_temp_image(self, data: bytes, suffix: str = ".png") -> str:
