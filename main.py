@@ -84,6 +84,18 @@ class MemesApiPlugin(Star):
         self._keyword_map: dict[str, Meme] = {}
         self._shortcut_patterns: list[tuple[re.Pattern, Meme, MemeShortcut]] = []
 
+    @filter.command_group("表情")
+    def meme(self):
+        pass
+
+    @filter.command_group("图片")
+    def image(self):
+        pass
+
+    @image.group("gif")
+    def image_gif(self):
+        pass
+
     def _init_config(self, config: AstrBotConfig):
         self.base_url = config.get("meme_generator_base_url", "http://127.0.0.1:2233")
         self.command_prefixes = config.get("memes_command_prefixes", [])
@@ -506,21 +518,8 @@ class MemesApiPlugin(Star):
 
         search_text = matched_text if matched_text is not None else message_str
 
-        for cmd_prefix in ["表情包制作", "表情列表", "表情包列表", "头像表情包", "文字表情包",
-                           "表情详情", "表情帮助", "表情示例",
-                           "表情搜索",
-                           "随机表情",
-                           "禁用表情", "启用表情", "全局禁用表情", "全局启用表情",
-                           "表情调用统计", "表情使用统计",
-                           "图片操作", "图片工具",
-                           "水平翻转", "左翻", "右翻",
-                           "竖直翻转", "上翻", "下翻",
-                           "旋转", "缩放", "裁剪",
-                           "灰度图", "黑白",
-                           "反相", "反色",
-                           "横向拼接", "纵向拼接",
-                           "gif分解", "gif合成", "gif倒放", "倒放", "gif变速"]:
-            if search_text == cmd_prefix or search_text.startswith(cmd_prefix + " ") or search_text.startswith(cmd_prefix + "\t"):
+        for group_name in ("表情", "图片"):
+            if search_text == group_name or search_text.startswith(group_name + " ") or search_text.startswith(group_name + "\t"):
                 return
 
         matched_meme = None
@@ -529,8 +528,8 @@ class MemesApiPlugin(Star):
 
         for keyword, meme in self._keyword_map.items():
             if search_text.lower().startswith(keyword.lower()):
-                rest = search_text[len(keyword):].strip()
-                if rest == "" or rest[0] in (" ", "\t", "@", "#", "-") or rest[0].isascii():
+                after_keyword = search_text[len(keyword):]
+                if after_keyword == "" or after_keyword[0] in (" ", "\t", "@", "#", "-"):
                     if matched_keyword is None or len(keyword) > len(matched_keyword):
                         matched_keyword = keyword
                         matched_meme = meme
@@ -584,7 +583,7 @@ class MemesApiPlugin(Star):
             yield result
             return
 
-    @filter.command("表情包制作", alias={"表情列表", "表情包列表"})
+    @meme.command("列表")
     async def meme_list(self, event: AstrMessageEvent):
         '''查看表情列表'''
         memes = self.meme_manager.get_memes()
@@ -628,16 +627,16 @@ class MemesApiPlugin(Star):
             img_path = f.name
 
         chain = [
-            Plain('触发方式："关键词 + 图片/文字/@某人"\n发送 "表情详情 + 关键词" 查看表情参数和预览\n目前支持的表情列表：'),
+            Plain('触发方式："关键词 + 图片/文字/@某人"\n发送 "表情 详情 + 关键词" 查看表情参数和预览\n目前支持的表情列表：'),
             CompImage.fromFileSystem(img_path),
         ]
         yield event.chain_result(chain)
 
-    @filter.command("表情详情", alias={"表情帮助", "表情示例"})
+    @meme.command("详情", alias={"帮助", "示例"})
     async def meme_info(self, event: AstrMessageEvent, meme_name: str = ""):
         '''查看表情详情和预览'''
         if not meme_name:
-            yield event.plain_result("请输入表情关键词，如：表情详情 摸")
+            yield event.plain_result("请输入表情关键词，如：表情 详情 摸")
             return
 
         meme = await self._find_meme(meme_name)
@@ -732,11 +731,11 @@ class MemesApiPlugin(Star):
             logger.warning(f"表情预览生成失败: {e}")
             yield event.plain_result(info_text)
 
-    @filter.command("表情搜索")
+    @meme.command("搜索")
     async def meme_search(self, event: AstrMessageEvent, query: str = ""):
         '''搜索表情'''
         if not query:
-            yield event.plain_result("请输入搜索关键词，如：表情搜索 摸")
+            yield event.plain_result("请输入搜索关键词，如：表情 搜索 摸")
             return
 
         try:
@@ -755,7 +754,7 @@ class MemesApiPlugin(Star):
         lines = [f"* {m.key} ({'/'.join(m.info.keywords)})" for m in found_memes[:20]]
         yield event.plain_result(f"搜索结果：\n" + "\n".join(lines))
 
-    @filter.command("随机表情")
+    @meme.command("随机")
     async def random_meme(self, event: AstrMessageEvent):
         '''随机制作一个表情'''
         if not self._memes_loaded:
@@ -783,11 +782,11 @@ class MemesApiPlugin(Star):
         ):
             yield result
 
-    @filter.command("禁用表情")
+    @meme.command("禁用")
     async def block_meme(self, event: AstrMessageEvent, meme_name: str = ""):
         '''禁用表情（管理员）'''
         if not meme_name:
-            yield event.plain_result("请输入表情关键词，如：禁用表情 摸")
+            yield event.plain_result("请输入表情关键词，如：表情 禁用 摸")
             return
 
         meme = await self._find_meme(meme_name)
@@ -799,11 +798,11 @@ class MemesApiPlugin(Star):
         self.meme_manager.block(user_id, meme.key)
         yield event.plain_result(f"表情 {meme.key} 禁用成功")
 
-    @filter.command("启用表情")
+    @meme.command("启用")
     async def unblock_meme(self, event: AstrMessageEvent, meme_name: str = ""):
         '''启用表情（管理员）'''
         if not meme_name:
-            yield event.plain_result("请输入表情关键词，如：启用表情 摸")
+            yield event.plain_result("请输入表情关键词，如：表情 启用 摸")
             return
 
         meme = await self._find_meme(meme_name)
@@ -815,11 +814,11 @@ class MemesApiPlugin(Star):
         self.meme_manager.unblock(user_id, meme.key)
         yield event.plain_result(f"表情 {meme.key} 启用成功")
 
-    @filter.command("全局禁用表情")
+    @meme.command("全局禁用")
     async def global_block_meme(self, event: AstrMessageEvent, meme_name: str = ""):
         '''全局禁用表情（超级用户）'''
         if not meme_name:
-            yield event.plain_result("请输入表情关键词")
+            yield event.plain_result("请输入表情关键词，如：表情 全局禁用 摸")
             return
 
         meme = await self._find_meme(meme_name)
@@ -830,11 +829,11 @@ class MemesApiPlugin(Star):
         self.meme_manager.change_mode(MemeMode.WHITE, meme.key)
         yield event.plain_result(f"表情 {meme.key} 已设为白名单模式")
 
-    @filter.command("全局启用表情")
+    @meme.command("全局启用")
     async def global_unblock_meme(self, event: AstrMessageEvent, meme_name: str = ""):
         '''全局启用表情（超级用户）'''
         if not meme_name:
-            yield event.plain_result("请输入表情关键词")
+            yield event.plain_result("请输入表情关键词，如：表情 全局启用 摸")
             return
 
         meme = await self._find_meme(meme_name)
@@ -845,7 +844,7 @@ class MemesApiPlugin(Star):
         self.meme_manager.change_mode(MemeMode.BLACK, meme.key)
         yield event.plain_result(f"表情 {meme.key} 已设为黑名单模式")
 
-    @filter.command("表情调用统计", alias={"表情使用统计"})
+    @meme.command("统计")
     async def meme_statistics(self, event: AstrMessageEvent):
         '''查看表情调用统计'''
         message_str = event.message_str.strip()
@@ -884,7 +883,7 @@ class MemesApiPlugin(Star):
 
         meme_name = None
         for part in message_str.split():
-            if part not in ("表情调用统计", "表情使用统计", "我的", "全局",
+            if part not in ("表情", "统计", "我的", "全局",
                            "日", "24小时", "1天", "本日", "今日",
                            "周", "一周", "7天", "本周",
                            "月", "30天", "本月", "月度",
@@ -1040,27 +1039,7 @@ class MemesApiPlugin(Star):
             if chain:
                 yield event.chain_result(chain)
 
-    @filter.command("图片操作", alias={"图片工具"})
-    async def image_operations_help(self, event: AstrMessageEvent):
-        '''查看图片操作帮助'''
-        yield event.plain_result(
-            "简单图片操作，支持的操作：\n"
-            "1、水平翻转/左翻/右翻\n"
-            "2、竖直翻转/上翻/下翻\n"
-            "3、旋转\n"
-            "4、缩放\n"
-            "5、裁剪\n"
-            "6、灰度图/黑白\n"
-            "7、反相/反色\n"
-            "8、横向拼接\n"
-            "9、纵向拼接\n"
-            "10、gif分解\n"
-            "11、gif合成\n"
-            "12、gif倒放/倒放\n"
-            "13、gif变速"
-        )
-
-    @filter.command("水平翻转", alias={"左翻", "右翻"})
+    @image.command("水平翻转", alias={"左翻", "右翻"})
     async def flip_horizontal(self, event: AstrMessageEvent):
         '''水平翻转图片'''
         img_data = await self._get_first_image(event)
@@ -1073,7 +1052,7 @@ class MemesApiPlugin(Star):
         except MemeGeneratorException as e:
             yield event.plain_result(f"操作失败：{e}")
 
-    @filter.command("竖直翻转", alias={"上翻", "下翻"})
+    @image.command("竖直翻转", alias={"上翻", "下翻"})
     async def flip_vertical(self, event: AstrMessageEvent):
         '''竖直翻转图片'''
         img_data = await self._get_first_image(event)
@@ -1086,7 +1065,7 @@ class MemesApiPlugin(Star):
         except MemeGeneratorException as e:
             yield event.plain_result(f"操作失败：{e}")
 
-    @filter.command("旋转")
+    @image.command("旋转")
     async def rotate(self, event: AstrMessageEvent, angle: float = None):
         '''旋转图片'''
         img_data = await self._get_first_image(event)
@@ -1099,9 +1078,9 @@ class MemesApiPlugin(Star):
         except MemeGeneratorException as e:
             yield event.plain_result(f"操作失败：{e}")
 
-    @filter.command("缩放")
+    @image.command("缩放")
     async def resize(self, event: AstrMessageEvent, size: str = ""):
-        '''缩放图片，如：缩放 100x100 或 缩放 50%'''
+        '''缩放图片，如：图片 缩放 100x100 或 图片 缩放 50%'''
         img_data = await self._get_first_image(event)
         if not img_data:
             yield event.plain_result("请发送一张图片")
@@ -1140,9 +1119,9 @@ class MemesApiPlugin(Star):
         except MemeGeneratorException as e:
             yield event.plain_result(f"操作失败：{e}")
 
-    @filter.command("裁剪")
+    @image.command("裁剪")
     async def crop(self, event: AstrMessageEvent, crop_spec: str = ""):
-        '''裁剪图片，如：裁剪 0,0,100,100 或 裁剪 100x100 或 裁剪 2:1'''
+        '''裁剪图片，如：图片 裁剪 0,0,100,100 或 图片 裁剪 100x100 或 图片 裁剪 2:1'''
         img_data = await self._get_first_image(event)
         if not img_data:
             yield event.plain_result("请发送一张图片")
@@ -1187,7 +1166,7 @@ class MemesApiPlugin(Star):
         except MemeGeneratorException as e:
             yield event.plain_result(f"操作失败：{e}")
 
-    @filter.command("灰度图", alias={"黑白"})
+    @image.command("灰度", alias={"黑白"})
     async def grayscale(self, event: AstrMessageEvent):
         '''将图片转为灰度图'''
         img_data = await self._get_first_image(event)
@@ -1200,7 +1179,7 @@ class MemesApiPlugin(Star):
         except MemeGeneratorException as e:
             yield event.plain_result(f"操作失败：{e}")
 
-    @filter.command("反相", alias={"反色"})
+    @image.command("反相", alias={"反色"})
     async def invert(self, event: AstrMessageEvent):
         '''将图片反相'''
         img_data = await self._get_first_image(event)
@@ -1213,7 +1192,7 @@ class MemesApiPlugin(Star):
         except MemeGeneratorException as e:
             yield event.plain_result(f"操作失败：{e}")
 
-    @filter.command("横向拼接")
+    @image.command("横向拼接")
     async def merge_horizontal(self, event: AstrMessageEvent):
         '''横向拼接多张图片'''
         images = await self._get_all_images(event)
@@ -1226,7 +1205,7 @@ class MemesApiPlugin(Star):
         except MemeGeneratorException as e:
             yield event.plain_result(f"操作失败：{e}")
 
-    @filter.command("纵向拼接")
+    @image.command("纵向拼接")
     async def merge_vertical(self, event: AstrMessageEvent):
         '''纵向拼接多张图片'''
         images = await self._get_all_images(event)
@@ -1239,7 +1218,7 @@ class MemesApiPlugin(Star):
         except MemeGeneratorException as e:
             yield event.plain_result(f"操作失败：{e}")
 
-    @filter.command("gif分解")
+    @image_gif.command("分解")
     async def gif_split(self, event: AstrMessageEvent):
         '''分解GIF为多帧'''
         img_data = await self._get_first_image(event)
@@ -1252,7 +1231,7 @@ class MemesApiPlugin(Star):
         except MemeGeneratorException as e:
             yield event.plain_result(f"操作失败：{e}")
 
-    @filter.command("gif合成")
+    @image_gif.command("合成")
     async def gif_merge(self, event: AstrMessageEvent, duration: float = None):
         '''合成多张图片为GIF'''
         images = await self._get_all_images(event)
@@ -1265,7 +1244,7 @@ class MemesApiPlugin(Star):
         except MemeGeneratorException as e:
             yield event.plain_result(f"操作失败：{e}")
 
-    @filter.command("gif倒放", alias={"倒放"})
+    @image_gif.command("倒放")
     async def gif_reverse(self, event: AstrMessageEvent):
         '''倒放GIF'''
         img_data = await self._get_first_image(event)
@@ -1278,7 +1257,7 @@ class MemesApiPlugin(Star):
         except MemeGeneratorException as e:
             yield event.plain_result(f"操作失败：{e}")
 
-    @filter.command("gif变速")
+    @image_gif.command("变速")
     async def gif_change_duration(self, event: AstrMessageEvent, speed: str = ""):
         '''调整GIF播放速度'''
         img_data = await self._get_first_image(event)

@@ -1,6 +1,6 @@
 name: astrbot_plugin_memes_api
 desc: 表情包制作插件，调用 meme-generator-rs API 制作各种沙雕表情包
-help: 发送"表情包制作"查看表情列表，发送"表情详情 + 关键词"查看表情详情，发送"关键词 + 图片/文字"制作表情
-version: v0.1.0
+help: 发送"表情 列表"查看表情列表，发送"表情 详情 + 关键词"查看表情详情，发送"关键词 + 图片/文字"制作表情，发送"图片"查看图片操作指令
+version: 0.1.0
 author: Leafiber
 repo: https://github.com/leafliber/astrbot_plugin_memes_api
